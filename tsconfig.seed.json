@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "outDir": ".seed-out",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["prisma/seed.ts"]
+}

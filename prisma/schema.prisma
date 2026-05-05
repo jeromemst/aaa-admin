@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Member {
+  id                String           @id @default(cuid())
+  email             String           @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  phone             String?
+  dateOfBirth       DateTime?
+  stripeCustomerId  String?          @unique
+  eligibilityStatus Int              @default(0)  // 0=Eligible 1=Pending 2=Suspended 3=Inactive 4=Blocked
+  state             String?                       // US state code e.g. "CA"
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  policies         Policy[]
+  paymentMethods   PaymentMethod[]
+  autoPaySettings  AutoPaySetting[]
+  billingHistory   BillingHistory[]
+  refreshTokens    RefreshToken[]
+}
+
+model InsurancePlan {
+  id               String       @id @default(cuid())
+  name             String
+  type             PlanType
+  description      String
+  premium          Float
+  coverageAmount   Float
+  deductible       Float
+  billingCycle     BillingCycle @default(MONTHLY)
+  features         Json
+  isActive         Boolean      @default(true)
+  stripePriceId    String?
+  productCode      String?                        // e.g. "CAC" for California products
+  stateRestriction String?                        // e.g. "CA" — credit cards blocked for this state
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  policies         Policy[]
+}
+
+model Policy {
+  id           String       @id @default(cuid())
+  policyNumber String       @unique
+  memberId     String
+  planId       String
+  status       PolicyStatus @default(ACTIVE)
+  startDate    DateTime
+  renewalDate  DateTime
+  endDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  member         Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan           InsurancePlan   @relation(fields: [planId], references: [id])
+  autoPaySetting AutoPaySetting?
+  billingHistory BillingHistory[]
+}
+
+model PaymentMethod {
+  id                    String    @id @default(cuid())
+  memberId              String
+  stripePaymentMethodId String    @unique
+  last4                 String
+  brand                 String
+  expMonth              Int
+  expYear               Int
+  isDefault             Boolean   @default(false)
+  panToken              String?   @unique          // PAN tokenized card reference
+  cardType              CardType  @default(CREDIT)
+  createdAt             DateTime  @default(now())
+
+  member          Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  autoPaySettings AutoPaySetting[]
+  activityLogs    CardActivityLog[]
+}
+
+model CardActivityLog {
+  id              String   @id @default(cuid())
+  paymentMethodId String
+  action          String   // CARD_TYPE_CHANGED | CARD_ADDED | CARD_REMOVED
+  fromValue       String?
+  toValue         String?
+  performedBy     String   // admin email
+  note            String?
+  createdAt       DateTime @default(now())
+
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Cascade)
+}
+
+model AutoPaySetting {
+  id                   String   @id @default(cuid())
+  memberId             String
+  policyId             String   @unique
+  paymentMethodId      String
+  stripeSubscriptionId String?  @unique
+  enabled              Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  member        Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  policy        Policy        @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+}
+
+model BillingHistory {
+  id                    String        @id @default(cuid())
+  memberId              String
+  policyId              String
+  amount                Float
+  status                PaymentStatus
+  description           String?
+  stripePaymentIntentId String?       @unique
+  stripeInvoiceId       String?       @unique
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  memberId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+enum PlanType {
+  HEALTH
+  AUTO
+  LIFE
+  HOME
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum PolicyStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PENDING
+}
+
+enum PaymentStatus {
+  SUCCEEDED
+  FAILED
+  PENDING
+  REFUNDED
+}
+
+enum CardType {
+  CREDIT
+  DEBIT
+  PREPAID
+}
